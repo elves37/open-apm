@@ -1,0 +1,14 @@
+mkdir -p ~/bin
+
+cat > ~/bin/mvn17 <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+# macOS (Apple Silicon) - Temurin 17로 Maven 실행
+export JAVA_HOME=$(/usr/libexec/java_home -v 17)
+export PATH="$JAVA_HOME/bin:$PATH"
+
+exec mvn "$@"
+EOF
+
+chmod +x ~/bin/mvn17
