@@ -6,8 +6,10 @@ import scouter.daemon.ConfigRef;
 import javax.sql.DataSource;
 import java.io.File;
 import java.time.Instant;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -28,6 +30,10 @@ public final class InfluxMysqlEtlService implements AutoCloseable {
     private final InfluxReader influx;
     private final MySqlWriter mysql;
 
+
+    private static final ZoneId LOG_ZONE = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS VV");
+ 
     public InfluxMysqlEtlService(ConfigRef cfgRef, DataSource ds) {
         this.cfgRef = cfgRef;
         // this.ds = ds;
@@ -101,7 +107,9 @@ public final class InfluxMysqlEtlService implements AutoCloseable {
         InfluxResultSet rs = influx.query(influxQl);
 
         int written = mysql.upsertAll(rs.rows());
-        log.info("[etl-raw] from=" + from + " to=" + to + " written=" + written);
+        String kstFrom = FMT.format(ZonedDateTime.ofInstant(from, LOG_ZONE));
+        String kstTo = FMT.format(ZonedDateTime.ofInstant(to, LOG_ZONE));
+        log.info("[etl-raw] from=" + kstFrom + " to=" + kstTo + " written=" + written);
 
         stateStore.saveLastInstant(to);
     }
