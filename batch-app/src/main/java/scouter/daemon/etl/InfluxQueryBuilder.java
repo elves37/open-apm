@@ -27,9 +27,11 @@ final class InfluxQueryBuilder {
                 .collect(Collectors.joining(", "));
 
         StringBuilder sb = new StringBuilder();
-        sb.append("SELECT ").append(select).append(" ");
-        sb.append("FROM \"").append(measurement).append("\" ");
-        sb.append("WHERE time >= '").append(from.toString()).append("' AND time < '").append(to.toString()).append("'' ");
+        sb.append("SELECT ").append(select).append(" ")
+          .append("FROM \"").append(measurement).append("\" ")
+          .append("WHERE time >= '").append(from.toString())
+          .append("' AND time < '").append(to.toString())
+          .append("' ");
 
         if (!tags.isEmpty()) {
             String groupBy = tags.stream()
