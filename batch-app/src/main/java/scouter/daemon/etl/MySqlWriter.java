@@ -1,39 +1,41 @@
 package scouter.daemon.etl;
 
-import scouter.daemon.AppConfig;
-import scouter.daemon.ConfigRef;
-
 import javax.sql.DataSource;
-import java.sql.*;
-import java.util.*;
+import java.sql.Connection;
+import java.sql.ParameterMetaData;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 
 final class MySqlWriter {
 
     private final DataSource ds;
-    private final ConfigRef cfgRef;
 
-    MySqlWriter(DataSource ds, ConfigRef cfgRef) {
+    MySqlWriter(DataSource ds) {
         this.ds = ds;
-        this.cfgRef = cfgRef;
     }
 
-    int upsertAll(List<EtlRow> rows) throws Exception {
-        if (rows == null || rows.isEmpty()) return 0;
+    int upsertAll(String table, List<String> tagKeys, List<String> fieldKeys, List<EtlRow> rows) throws Exception {
+        if (rows == null || rows.isEmpty()) {
+            return 0;
+        }
+        if (fieldKeys == null || fieldKeys.isEmpty()) {
+            throw new IllegalArgumentException("etl.fields is empty");
+        }
 
-        AppConfig cfg = cfgRef.get();
-        String table = cfg.get("etl.mysql.table", "scouter_counter_raw");
+        List<String> distinctTags = splitCsvDistinct(tagKeys);
+        List<String> distinctFields = splitCsvDistinct(fieldKeys);
 
-        List<String> tagKeys = splitCsvDistinct(cfg.get("etl.tags", "obj,objFamily,objType,objHashTag"));
-        List<String> fieldKeys = splitCsvDistinct(cfg.get("etl.fields", ""));
-        if (fieldKeys.isEmpty()) throw new IllegalArgumentException("etl.fields is empty");
-
-        Columns cols = Columns.ofRaw(table, tagKeys, fieldKeys);
+        Columns cols = Columns.of(table, distinctTags, distinctFields);
         String sql = buildUpsertSql(table, cols);
 
         int cnt = 0;
         try (Connection c = ds.getConnection()) {
             c.setAutoCommit(false);
-
             try (PreparedStatement ps = c.prepareStatement(sql)) {
                 for (EtlRow r : rows) {
                     bind(ps, r, cols);
@@ -45,11 +47,13 @@ final class MySqlWriter {
                         c.commit();
                     }
                 }
-
                 ps.executeBatch();
                 c.commit();
             } catch (Exception e) {
-                try { c.rollback(); } catch (Exception ignore) {}
+                try {
+                    c.rollback();
+                } catch (Exception ignore) {
+                }
                 throw e;
             }
         }
@@ -60,17 +64,17 @@ final class MySqlWriter {
     private void bind(PreparedStatement ps, EtlRow r, Columns cols) throws Exception {
         int i = 1;
 
-        // raw time 그대로 저장 (UTC 기준 Instant)
         ps.setTimestamp(i++, Timestamp.from(r.ts));
 
-        // tags
         for (String tk : cols.tagKeys) {
-            String v = r.tags.get(tk);
-            if (v == null) ps.setNull(i++, Types.VARCHAR);
-            else ps.setString(i++, v);
+            Object v = r.tags.get(tk);
+            if (v == null) {
+                ps.setNull(i++, Types.VARCHAR);
+            } else {
+                ps.setString(i++, v.toString());
+            }
         }
 
-        // fields: 원본 필드명 그대로
         for (String fk : cols.fieldCols) {
             Object v = r.fields.get(fk);
             setField(ps, i++, v);
@@ -80,11 +84,13 @@ final class MySqlWriter {
         if (expected > 0) {
             int bound = i - 1;
             if (bound != expected) {
-                throw new SQLException("Bind parameter count mismatch. bound=" + bound
-                        + ", expected=" + expected
-                        + ", tags=" + cols.tagKeys.size()
-                        + ", fields=" + cols.fieldCols.size()
-                        + ", table=" + cols.tableDebug);
+                throw new SQLException(
+                        "Bind parameter count mismatch. bound=" + bound +
+                        ", expected=" + expected +
+                        ", tags=" + cols.tagKeys.size() +
+                        ", fields=" + cols.fieldCols.size() +
+                        ", table=" + cols.tableDebug
+                );
             }
         }
     }
@@ -98,9 +104,15 @@ final class MySqlWriter {
     }
 
     private static Object normalize(Object v) {
-        if (v == null) return null;
-        if (v instanceof Number) return v;
-        if (v instanceof Boolean) return ((Boolean) v) ? 1 : 0;
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Number) {
+            return v;
+        }
+        if (v instanceof Boolean) {
+            return ((Boolean) v) ? 1 : 0;
+        }
         return v.toString();
     }
 
@@ -120,18 +132,22 @@ final class MySqlWriter {
         StringBuilder update = new StringBuilder();
         for (int i = 0; i < cols.fieldCols.size(); i++) {
             String fk = cols.fieldCols.get(i);
-            if (i > 0) update.append(", ");
+            if (i > 0) {
+                update.append(", ");
+            }
             update.append(quote(fk)).append("=VALUES(").append(quote(fk)).append(")");
         }
 
-        return "INSERT INTO " + table + " (" + colList + ") VALUES (" + placeholders + ") "
-                + "ON DUPLICATE KEY UPDATE " + update;
+        return "INSERT INTO " + table + " (" + colList + ") VALUES (" + placeholders + ") " +
+                "ON DUPLICATE KEY UPDATE " + update;
     }
 
     private String joinCols(List<String> cols) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < cols.size(); i++) {
-            if (i > 0) sb.append(", ");
+            if (i > 0) {
+                sb.append(", ");
+            }
             sb.append(quote(cols.get(i)));
         }
         return sb.toString();
@@ -140,7 +156,9 @@ final class MySqlWriter {
     private String placeholders(int n) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < n; i++) {
-            if (i > 0) sb.append(", ");
+            if (i > 0) {
+                sb.append(", ");
+            }
             sb.append("?");
         }
         return sb.toString();
@@ -150,12 +168,19 @@ final class MySqlWriter {
         return "`" + col + "`";
     }
 
-    private static List<String> splitCsvDistinct(String s) {
-        if (s == null) return List.of();
+    private static List<String> splitCsvDistinct(List<String> values) {
         LinkedHashSet<String> out = new LinkedHashSet<>();
-        for (String a : s.split(",")) {
-            String v = a.trim();
-            if (!v.isEmpty()) out.add(v);
+        if (values == null) {
+            return List.of();
+        }
+        for (String v : values) {
+            if (v == null) {
+                continue;
+            }
+            String s = v.trim();
+            if (!s.isEmpty()) {
+                out.add(s);
+            }
         }
         return new ArrayList<>(out);
     }
@@ -166,14 +191,19 @@ final class MySqlWriter {
         final List<String> fieldCols;
         final List<String> allCols;
 
-        private Columns(String tableDebug, List<String> tagKeys, List<String> fieldCols, List<String> allCols) {
+        private Columns(
+                String tableDebug,
+                List<String> tagKeys,
+                List<String> fieldCols,
+                List<String> allCols
+        ) {
             this.tableDebug = tableDebug;
             this.tagKeys = tagKeys;
             this.fieldCols = fieldCols;
             this.allCols = allCols;
         }
 
-        static Columns ofRaw(String table, List<String> tagKeys, List<String> fieldKeys) {
+        static Columns of(String table, List<String> tagKeys, List<String> fieldKeys) {
             List<String> all = new ArrayList<>();
             all.add("ts");
             all.addAll(tagKeys);
