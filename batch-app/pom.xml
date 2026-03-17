@@ -104,6 +104,17 @@
         <version>3.7.1</version>
         <executions>
           <execution>
+            <id>copy-deps-to-lib</id>
+            <phase>compile</phase>
+            <goals>
+              <goal>copy-dependencies</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.basedir}/lib</outputDirectory>
+              <includeScope>runtime</includeScope>
+            </configuration>
+          </execution>
+          <execution>
             <id>copy-dependencies</id>
             <phase>package</phase>
             <goals>
@@ -128,30 +139,6 @@
         <configuration>
           <skipTests>true</skipTests>
         </configuration>
-      </plugin>
-      
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-dependency-plugin</artifactId>
-        <version>3.7.1</version>
-        <executions>
-          <execution>
-            <id>copy-deps-to-lib</id>
-            <phase>compile</phase>
-            <goals>
-                <goal>copy-dependencies</goal>
-            </goals>
-            <configuration>
-                <outputDirectory>${project.basedir}/lib</outputDirectory>
-                <!-- 필요에 따라 -->
-                <includeScope>runtime</includeScope> <!-- runtime만 (compile 포함) -->
-                <!-- <excludeScope>test</excludeScope> -->
-                <!-- <excludeTransitive>true</excludeTransitive> -->
-                <!-- <overWriteReleases>false</overWriteReleases> -->
-                <!-- <overWriteSnapshots>true</overWriteSnapshots> -->
-            </configuration>
-          </execution>
-        </executions>
       </plugin>
     </plugins>
   </build>

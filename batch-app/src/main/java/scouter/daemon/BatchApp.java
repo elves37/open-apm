@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import java.nio.file.Paths;
-import java.time.Instant;
 import java.time.ZoneId;
 import java.util.TimeZone;
 import org.slf4j.Logger;
@@ -22,8 +21,6 @@ import scouter.daemon.xlog.profile.XlogProfileDao;
 public class BatchApp {
 
     public static void main(String[] args) {
-        System.out.println(Instant.now().minusSeconds(Math.max(0, 15)));
-
         String configPath = System.getProperty("config.file", "config/application.properties");
         AppConfig initial = AppConfig.load(configPath);
         configureRuntimeLogging(initial);

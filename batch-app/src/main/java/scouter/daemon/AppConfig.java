@@ -94,10 +94,10 @@ public class AppConfig {
         this.scouterAuthHeader = get("scouter.auth.header", "");
         this.httpTimeoutSeconds = getInt("http.timeout.seconds", 10);
 
-        this.dbMysqlJdbcUrl = must("db.mysql.jdbcUrl");
-        this.dbMysqlUsername = get("db.mysql.username", "root");
-        this.dbMysqlPassword = get("db.mysql.password", "");
-        this.dbMysqlPoolSize = getInt("db.mysql.poolSize", 10);
+        this.dbMysqlJdbcUrl = mustAny("db.mysql.jdbcUrl", "db.jdbcUrl");
+        this.dbMysqlUsername = getAny("root", "db.mysql.username", "db.username");
+        this.dbMysqlPassword = getAny("", "db.mysql.password", "db.password");
+        this.dbMysqlPoolSize = getIntAny(10, "db.mysql.poolSize", "db.poolSize");
         this.dbMysqlMinimumIdle = getInt("db.mysql.minimumIdle", 1);
         this.dbMysqlConnectionTimeoutMs = getInt("db.mysql.connectionTimeout.ms", 10_000);
         this.dbMysqlIdleTimeoutMs = getInt("db.mysql.idleTimeout.ms", 60_000);
@@ -204,6 +204,16 @@ public class AppConfig {
         return (v == null || v.trim().isEmpty()) ? def : v.trim();
     }
 
+    public String getAny(String def, String... keys) {
+        for (String key : keys) {
+            String v = p.getProperty(key);
+            if (v != null && !v.trim().isEmpty()) {
+                return v.trim();
+            }
+        }
+        return def;
+    }
+
     public int getInt(String key, int def) {
         String v = p.getProperty(key);
         if (v == null || v.trim().isEmpty()) {
@@ -214,6 +224,20 @@ public class AppConfig {
         } catch (Exception e) {
             return def;
         }
+    }
+
+    public int getIntAny(int def, String... keys) {
+        for (String key : keys) {
+            String v = p.getProperty(key);
+            if (v == null || v.trim().isEmpty()) {
+                continue;
+            }
+            try {
+                return Integer.parseInt(v.trim());
+            } catch (Exception ignore) {
+            }
+        }
+        return def;
     }
 
     public boolean getBool(String key, boolean def) {
@@ -230,6 +254,16 @@ public class AppConfig {
             throw new IllegalArgumentException("Missing property: " + key);
         }
         return v.trim();
+    }
+
+    public String mustAny(String... keys) {
+        for (String key : keys) {
+            String v = p.getProperty(key);
+            if (v != null && !v.trim().isEmpty()) {
+                return v.trim();
+            }
+        }
+        throw new IllegalArgumentException("Missing property: " + String.join(" or ", keys));
     }
 
     public Properties raw() {
