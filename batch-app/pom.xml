@@ -91,7 +91,7 @@
         <configuration>
           <archive>
             <manifest>
-              <mainClass>scouter.daemon.UnifiedDaemonApp</mainClass>
+              <mainClass>scouter.daemon.BatchApp</mainClass>
             </manifest>
           </archive>
         </configuration>
